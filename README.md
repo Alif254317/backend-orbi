@@ -118,6 +118,10 @@ Cada módulo expõe rotas CRUD próprias sob seu prefixo (`/agenda`, `/shopping`
 - `GET /health` — status do serviço
 - `GET /modules` — lista dos módulos habilitados (usado pelo app)
 
+## Integração externa
+
+Sistemas de terceiros (Zapier, n8n, scripts próprios, etc.) podem conversar com o agente via API key gerada no app do usuário. Veja [INTEGRATION.md](./INTEGRATION.md) para o passo a passo, exemplos em cURL/Python/Node e boas práticas.
+
 ## Desenvolvimento
 
 O `uvicorn` roda com `reload=True` ao executar `python app.py`, então mudanças em `agents/`, `api/` e `tools/` recarregam automaticamente.
