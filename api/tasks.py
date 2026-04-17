@@ -1,15 +1,15 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 class TaskCreate(BaseModel):
-    user_id: str
     title: str
     description: Optional[str] = None
     priority: str = "medium"
@@ -27,11 +27,11 @@ class TaskUpdate(BaseModel):
 
 @router.get("")
 async def list_tasks(
-    user_id: str = Query(...),
     status: Optional[str] = None,
     priority: Optional[str] = None,
     due_before: Optional[str] = None,
     limit: int = 100,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     q = sb.table("tasks").select("*").eq("user_id", user_id)
@@ -46,13 +46,14 @@ async def list_tasks(
 
 
 @router.post("")
-async def create_task(task: TaskCreate):
+async def create_task(task: TaskCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     if task.priority not in ("low", "medium", "high", "urgent"):
         raise HTTPException(status_code=400, detail="Invalid priority")
     if task.status not in ("pending", "in_progress", "completed", "cancelled"):
         raise HTTPException(status_code=400, detail="Invalid status")
     data = task.model_dump(exclude_none=True)
+    data["user_id"] = user_id
     try:
         result = sb.table("tasks").insert(data).execute()
         return {"task": result.data[0]}
@@ -61,7 +62,7 @@ async def create_task(task: TaskCreate):
 
 
 @router.get("/{task_id}")
-async def get_task(task_id: str, user_id: str = Query(...)):
+async def get_task(task_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("tasks")
@@ -77,7 +78,7 @@ async def get_task(task_id: str, user_id: str = Query(...)):
 
 
 @router.put("/{task_id}")
-async def update_task(task_id: str, updates: TaskUpdate, user_id: str = Query(...)):
+async def update_task(task_id: str, updates: TaskUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -100,7 +101,7 @@ async def update_task(task_id: str, updates: TaskUpdate, user_id: str = Query(..
 
 
 @router.delete("/{task_id}")
-async def delete_task(task_id: str, user_id: str = Query(...)):
+async def delete_task(task_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("tasks")

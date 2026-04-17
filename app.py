@@ -1,10 +1,11 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from config import HOST, PORT
 from agents.router import get_router
+from auth import get_current_user_id
 from api import agenda as agenda_api
 from api import shopping as shopping_api
 from api import finance as finance_api
@@ -85,7 +86,6 @@ MODULES = [
 class ChatRequest(BaseModel):
     session_id: str
     message: str
-    user_id: str
     context: dict | None = None
 
 
@@ -106,11 +106,11 @@ async def list_modules():
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, user_id: str = Depends(get_current_user_id)):
     try:
         router = get_router(
             session_id=request.session_id,
-            user_id=request.user_id,
+            user_id=user_id,
         )
 
         response = router.run(request.message)

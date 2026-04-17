@@ -1,15 +1,15 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/shopping", tags=["shopping"])
 
 
 class ListCreate(BaseModel):
-    user_id: str
     name: str = "Minha Lista"
 
 
@@ -37,7 +37,7 @@ class ItemUpdate(BaseModel):
 
 
 @router.get("/lists")
-async def list_lists(user_id: str = Query(...), only_active: bool = True):
+async def list_lists(only_active: bool = True, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     q = sb.table("shopping_lists").select("*").eq("user_id", user_id)
     if only_active:
@@ -47,14 +47,16 @@ async def list_lists(user_id: str = Query(...), only_active: bool = True):
 
 
 @router.post("/lists")
-async def create_list(payload: ListCreate):
+async def create_list(payload: ListCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
-    result = sb.table("shopping_lists").insert(payload.model_dump()).execute()
+    data = payload.model_dump()
+    data["user_id"] = user_id
+    result = sb.table("shopping_lists").insert(data).execute()
     return {"list": result.data[0]}
 
 
 @router.put("/lists/{list_id}")
-async def update_list(list_id: str, updates: ListUpdate, user_id: str = Query(...)):
+async def update_list(list_id: str, updates: ListUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -72,7 +74,7 @@ async def update_list(list_id: str, updates: ListUpdate, user_id: str = Query(..
 
 
 @router.delete("/lists/{list_id}")
-async def delete_list(list_id: str, user_id: str = Query(...)):
+async def delete_list(list_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("shopping_lists")
@@ -102,8 +104,8 @@ def _verify_list_ownership(sb, list_id: str, user_id: str):
 @router.get("/items")
 async def list_items(
     list_id: str = Query(...),
-    user_id: str = Query(...),
     show_checked: bool = True,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     _verify_list_ownership(sb, list_id, user_id)
@@ -115,7 +117,7 @@ async def list_items(
 
 
 @router.post("/items")
-async def create_item(payload: ItemCreate, user_id: str = Query(...)):
+async def create_item(payload: ItemCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     _verify_list_ownership(sb, payload.list_id, user_id)
     data = payload.model_dump(exclude_none=True)
@@ -124,7 +126,7 @@ async def create_item(payload: ItemCreate, user_id: str = Query(...)):
 
 
 @router.put("/items/{item_id}")
-async def update_item(item_id: str, updates: ItemUpdate, user_id: str = Query(...)):
+async def update_item(item_id: str, updates: ItemUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -145,7 +147,7 @@ async def update_item(item_id: str, updates: ItemUpdate, user_id: str = Query(..
 
 
 @router.delete("/items/{item_id}")
-async def delete_item(item_id: str, user_id: str = Query(...)):
+async def delete_item(item_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     item_check = (
         sb.table("shopping_items")

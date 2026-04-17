@@ -1,16 +1,16 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/agenda", tags=["agenda"])
 
 
 class EventCreate(BaseModel):
-    user_id: str
     title: str
     start_at: str
     description: Optional[str] = None
@@ -33,10 +33,10 @@ class EventUpdate(BaseModel):
 
 @router.get("/events")
 async def list_events(
-    user_id: str = Query(...),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     limit: int = 100,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     q = sb.table("events").select("*").eq("user_id", user_id)
@@ -49,7 +49,7 @@ async def list_events(
 
 
 @router.get("/events/today")
-async def today_events(user_id: str = Query(...)):
+async def today_events(user_id: str = Depends(get_current_user_id)):
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow = today + timedelta(days=1)
     return await list_events(
@@ -60,9 +60,10 @@ async def today_events(user_id: str = Query(...)):
 
 
 @router.post("/events")
-async def create_event(event: EventCreate):
+async def create_event(event: EventCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = event.model_dump(exclude_none=True)
+    data["user_id"] = user_id
     try:
         result = sb.table("events").insert(data).execute()
         return {"event": result.data[0]}
@@ -71,7 +72,7 @@ async def create_event(event: EventCreate):
 
 
 @router.get("/events/{event_id}")
-async def get_event(event_id: str, user_id: str = Query(...)):
+async def get_event(event_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("events")
@@ -87,7 +88,7 @@ async def get_event(event_id: str, user_id: str = Query(...)):
 
 
 @router.put("/events/{event_id}")
-async def update_event(event_id: str, updates: EventUpdate, user_id: str = Query(...)):
+async def update_event(event_id: str, updates: EventUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -110,7 +111,7 @@ async def update_event(event_id: str, updates: EventUpdate, user_id: str = Query
 
 
 @router.delete("/events/{event_id}")
-async def delete_event(event_id: str, user_id: str = Query(...)):
+async def delete_event(event_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("events")

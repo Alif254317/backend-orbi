@@ -1,16 +1,16 @@
 from datetime import date, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 
 
 class TransactionCreate(BaseModel):
-    user_id: str
     type: str
     amount: float
     description: Optional[str] = None
@@ -27,7 +27,7 @@ class TransactionUpdate(BaseModel):
 
 
 @router.get("/categories")
-async def list_categories(user_id: str = Query(...), type: Optional[str] = None):
+async def list_categories(type: Optional[str] = None, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     q = sb.table("finance_categories").select("*").or_(
         f"user_id.eq.{user_id},is_default.eq.true"
@@ -40,12 +40,12 @@ async def list_categories(user_id: str = Query(...), type: Optional[str] = None)
 
 @router.get("/transactions")
 async def list_transactions(
-    user_id: str = Query(...),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     type: Optional[str] = None,
     category_id: Optional[str] = None,
     limit: int = 200,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     q = (
@@ -66,9 +66,10 @@ async def list_transactions(
 
 
 @router.post("/transactions")
-async def create_transaction(tx: TransactionCreate):
+async def create_transaction(tx: TransactionCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = tx.model_dump(exclude_none=True)
+    data["user_id"] = user_id
     if data.get("type") not in ("income", "expense"):
         raise HTTPException(status_code=400, detail="type must be income or expense")
     if data["amount"] < 0:
@@ -81,7 +82,7 @@ async def create_transaction(tx: TransactionCreate):
 
 
 @router.put("/transactions/{tx_id}")
-async def update_transaction(tx_id: str, updates: TransactionUpdate, user_id: str = Query(...)):
+async def update_transaction(tx_id: str, updates: TransactionUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -99,7 +100,7 @@ async def update_transaction(tx_id: str, updates: TransactionUpdate, user_id: st
 
 
 @router.delete("/transactions/{tx_id}")
-async def delete_transaction(tx_id: str, user_id: str = Query(...)):
+async def delete_transaction(tx_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("finance_transactions")
@@ -115,8 +116,8 @@ async def delete_transaction(tx_id: str, user_id: str = Query(...)):
 
 @router.get("/summary")
 async def summary(
-    user_id: str = Query(...),
     period: str = Query("month", regex="^(today|week|month|year)$"),
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     today = date.today()

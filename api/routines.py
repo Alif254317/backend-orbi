@@ -1,16 +1,16 @@
 from datetime import datetime, date, time as dtime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.supabase_client import get_supabase
 
 router = APIRouter(prefix="/api/routines", tags=["routines"])
 
 
 class RoutineCreate(BaseModel):
-    user_id: str
     title: str
     times: list[str]
     category: str = "other"
@@ -32,7 +32,6 @@ class RoutineUpdate(BaseModel):
 
 
 class LogEntry(BaseModel):
-    user_id: str
     scheduled_at: Optional[str] = None
     note: Optional[str] = None
     skipped: bool = False
@@ -40,9 +39,9 @@ class LogEntry(BaseModel):
 
 @router.get("")
 async def list_routines(
-    user_id: str = Query(...),
     active_only: bool = True,
     category: Optional[str] = None,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     q = sb.table("routines").select("*").eq("user_id", user_id)
@@ -55,9 +54,10 @@ async def list_routines(
 
 
 @router.post("")
-async def create_routine(payload: RoutineCreate):
+async def create_routine(payload: RoutineCreate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = payload.model_dump(exclude_none=True)
+    data["user_id"] = user_id
     try:
         result = sb.table("routines").insert(data).execute()
         return {"routine": result.data[0]}
@@ -66,7 +66,7 @@ async def create_routine(payload: RoutineCreate):
 
 
 @router.get("/today")
-async def today_routines(user_id: str = Query(...)):
+async def today_routines(user_id: str = Depends(get_current_user_id)):
     """Return today's routines with per-routine completion count."""
     sb = get_supabase()
     today = date.today()
@@ -112,7 +112,7 @@ async def today_routines(user_id: str = Query(...)):
 
 
 @router.get("/{routine_id}")
-async def get_routine(routine_id: str, user_id: str = Query(...)):
+async def get_routine(routine_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("routines")
@@ -131,7 +131,7 @@ async def get_routine(routine_id: str, user_id: str = Query(...)):
 async def update_routine(
     routine_id: str,
     updates: RoutineUpdate,
-    user_id: str = Query(...),
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
@@ -150,7 +150,7 @@ async def update_routine(
 
 
 @router.delete("/{routine_id}")
-async def delete_routine(routine_id: str, user_id: str = Query(...)):
+async def delete_routine(routine_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("routines")
@@ -165,7 +165,11 @@ async def delete_routine(routine_id: str, user_id: str = Query(...)):
 
 
 @router.post("/{routine_id}/logs")
-async def log_routine(routine_id: str, payload: LogEntry):
+async def log_routine(
+    routine_id: str,
+    payload: LogEntry,
+    user_id: str = Depends(get_current_user_id),
+):
     sb = get_supabase()
 
     # Verify ownership
@@ -173,7 +177,7 @@ async def log_routine(routine_id: str, payload: LogEntry):
         sb.table("routines")
         .select("id")
         .eq("id", routine_id)
-        .eq("user_id", payload.user_id)
+        .eq("user_id", user_id)
         .maybe_single()
         .execute()
     )
@@ -183,7 +187,7 @@ async def log_routine(routine_id: str, payload: LogEntry):
     now = datetime.now().isoformat()
     data = {
         "routine_id": routine_id,
-        "user_id": payload.user_id,
+        "user_id": user_id,
         "scheduled_at": payload.scheduled_at or now,
         "completed_at": None if payload.skipped else now,
         "skipped": payload.skipped,
@@ -197,8 +201,8 @@ async def log_routine(routine_id: str, payload: LogEntry):
 @router.get("/{routine_id}/logs")
 async def list_logs(
     routine_id: str,
-    user_id: str = Query(...),
     days: int = 7,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     since = (datetime.now() - timedelta(days=days)).isoformat()
@@ -215,7 +219,7 @@ async def list_logs(
 
 
 @router.delete("/logs/{log_id}")
-async def delete_log(log_id: str, user_id: str = Query(...)):
+async def delete_log(log_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("routine_logs")

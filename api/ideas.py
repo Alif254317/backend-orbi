@@ -1,8 +1,9 @@
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from auth import get_current_user_id
 from tools.ideas import structure_idea
 from tools.supabase_client import get_supabase
 
@@ -10,7 +11,6 @@ router = APIRouter(prefix="/api/ideas", tags=["ideas"])
 
 
 class IdeaCapture(BaseModel):
-    user_id: str
     raw_text: str
     source: str = "text"  # 'text' or 'voice'
 
@@ -25,11 +25,11 @@ class IdeaUpdate(BaseModel):
 
 @router.get("")
 async def list_ideas(
-    user_id: str = Query(...),
     category: Optional[str] = None,
     tag: Optional[str] = None,
     archived: bool = False,
     limit: int = 100,
+    user_id: str = Depends(get_current_user_id),
 ):
     sb = get_supabase()
     q = sb.table("ideas").select("*").eq("user_id", user_id).eq("is_archived", archived)
@@ -42,7 +42,7 @@ async def list_ideas(
 
 
 @router.post("/capture")
-async def capture(payload: IdeaCapture):
+async def capture(payload: IdeaCapture, user_id: str = Depends(get_current_user_id)):
     """Structure raw text into a card using LLM and save."""
     if not payload.raw_text or not payload.raw_text.strip():
         raise HTTPException(status_code=400, detail="raw_text is required")
@@ -52,7 +52,7 @@ async def capture(payload: IdeaCapture):
     structured = structure_idea(payload.raw_text)
     sb = get_supabase()
     data = {
-        "user_id": payload.user_id,
+        "user_id": user_id,
         "title": structured["title"],
         "content": structured["content"],
         "raw_text": payload.raw_text,
@@ -68,7 +68,7 @@ async def capture(payload: IdeaCapture):
 
 
 @router.get("/{idea_id}")
-async def get_idea(idea_id: str, user_id: str = Query(...)):
+async def get_idea(idea_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("ideas")
@@ -84,7 +84,7 @@ async def get_idea(idea_id: str, user_id: str = Query(...)):
 
 
 @router.put("/{idea_id}")
-async def update_idea(idea_id: str, updates: IdeaUpdate, user_id: str = Query(...)):
+async def update_idea(idea_id: str, updates: IdeaUpdate, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     data = updates.model_dump(exclude_none=True)
     if not data:
@@ -102,7 +102,7 @@ async def update_idea(idea_id: str, updates: IdeaUpdate, user_id: str = Query(..
 
 
 @router.delete("/{idea_id}")
-async def delete_idea(idea_id: str, user_id: str = Query(...)):
+async def delete_idea(idea_id: str, user_id: str = Depends(get_current_user_id)):
     sb = get_supabase()
     result = (
         sb.table("ideas")
