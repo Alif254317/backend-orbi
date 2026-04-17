@@ -102,7 +102,7 @@ Exemplo: um integrador pode usar o ID da thread no Slack como `session_id`, ou u
 ### cURL
 
 ```bash
-curl -X POST https://seu-host/chat \
+curl -X POST https://arara-backend-production.up.railway.app/chat \
   -H "Content-Type: application/json" \
   -H "X-API-Key: ara_live_AbC123..." \
   -d '{
@@ -117,7 +117,7 @@ curl -X POST https://seu-host/chat \
 import requests
 
 API_KEY = "ara_live_AbC123..."
-BASE_URL = "https://seu-host"
+BASE_URL = "https://arara-backend-production.up.railway.app"
 
 def send_message(session_id: str, message: str) -> str:
     r = requests.post(
@@ -139,7 +139,7 @@ print(send_message("sess-001", "quanto gastei esse mês?"))
 
 ```ts
 const API_KEY = process.env.ARARA_API_KEY!;
-const BASE_URL = "https://seu-host";
+const BASE_URL = "https://arara-backend-production.up.railway.app";
 
 async function sendMessage(sessionId: string, message: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/chat`, {
@@ -163,7 +163,8 @@ console.log(await sendMessage("sess-001", "me lembra amanhã de ligar pro João"
 
 Configure uma requisição HTTP genérica:
 - **Método:** POST
-- **URL:** `https://seu-host/chat`
+- **URL base:** `https://arara-backend-production.up.railway.app`
+**URL do endpoint:** `https://arara-backend-production.up.railway.app/chat`
 - **Headers:** `X-API-Key: ara_live_...`, `Content-Type: application/json`
 - **Body:** `{"session_id": "{{$execution.id}}", "message": "{{$json.texto}}"}`
 
